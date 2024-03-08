@@ -5,6 +5,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![deny(clippy::unwrap_used)]
 
+/// Iterate over all contiguous stings of alphabetical characters
 pub fn get_words(cadena: &str) -> impl Iterator<Item = &str> {
     cadena
         .split(' ')
@@ -15,6 +16,7 @@ pub fn get_words(cadena: &str) -> impl Iterator<Item = &str> {
         .filter(|a| !a.is_empty())
 }
 
+/// Iterator that yields a space between each item from the original iterator
 pub fn space_join<'a>(mut iter: impl Iterator<Item = &'a str>) -> impl Iterator<Item = &'a str> {
     SpaceJoiner {
         next_is_space: true,
@@ -23,6 +25,32 @@ pub fn space_join<'a>(mut iter: impl Iterator<Item = &'a str>) -> impl Iterator<
     }
 }
 
+/// Iterator that yields each word in a string with a space between each one
+///
+/// # Examples
+///
+/// ```
+/// use strings::sanitize_spaces_iter;
+///
+/// let text = "\t\t\n Hello, \n\n\t \r\n world!\n\t\n";
+///
+/// assert_eq!(sanitize_spaces_iter(text).collect::<Vec<_>>(), vec!["Hello,", " ", "world!"]);
+/// ```
+pub fn sanitize_spaces_iter(string: &str) -> impl Iterator<Item = &str> {
+    space_join(get_words(string))
+}
+
+/// Iterator that yields each word in a string with a space between each one
+///
+/// # Examples
+///
+/// ```
+/// use strings::sanitize_spaces;
+///
+/// let text = "\t\t\n Hello,\n\n\t \r\n world!\n\t\n";
+///
+/// assert_eq!(sanitize_spaces(text), "Hello, world!".to_string());
+/// ```
 #[must_use]
 pub fn sanitize_spaces(string: &str) -> String {
     let words = get_words(string);
