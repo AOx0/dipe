@@ -14,3 +14,16 @@ rust_xlsxwriter = "0.63.0"
 itertools = "0.12.1"
 thiserror = "1.0.57"
 polars_excel_writer = "0.7.0"
+
+
+[profile.release]
+# opt-level = "z"
+lto = "thin"
+
+[profile.opt]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+strip = true
+# strip = "debuginfo" # TODO: or strip = true
+opt-level = 3

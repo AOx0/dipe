@@ -127,9 +127,11 @@ fn main() {
                     })
             }
 
-            let finals = finals.into_iter().collect::<BTreeSet<Vec<_>>>();
+            let mut vfinal = Vec::new();
+            vfinal.push(headers);
+            vfinal.extend(finals.into_iter().collect::<BTreeSet<Vec<_>>>());
 
-            println!("{finals:#?}")
+            println!("{vfinal:#?}")
         }
     }
 }
