@@ -9,4 +9,4 @@ edition = "2021"
 polars = { workspace = true, default-features = true }
 calamine.workspace = true
 polars_excel_writer.workspace = true
-polars_sheet_reader = { path = "../polars_sheet_reader/" }
+polars_sheet_reader = { path = "../psr/" }

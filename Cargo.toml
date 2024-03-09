@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "polars_sheet_reader",
+    "psr",
     "strings",
     "utils",
     "icups",

@@ -4,7 +4,7 @@
 
 ### Libs
 
-- `polars_sheet_reader`: Read Excel files into polars dataframes.
+- `psr`: Includes `polars_sheet_reader`, to read Excel files into polars dataframes.
 - `strings`: String iterators for sanitization.
 
 ### Bins
