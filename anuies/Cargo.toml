@@ -1,0 +1,14 @@
+[package]
+name = "anuies"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+calamine.workspace = true
+rfd.workspace = true
+rust_xlsxwriter.workspace = true
+itertools.workspace = true
+clap.workspace = true
+
+[build-dependencies]
+embed-resource.workspace = true

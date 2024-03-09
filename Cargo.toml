@@ -3,21 +3,24 @@ members = [
     "psr",
     "strings",
     "utils",
-    "icups",
+    "icups", 
+    "anuies",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-calamine = "0.24.0"
 polars = { version = "0.37.0", default-features = false, features = ["lazy", "strings", "regex", "polars-io"]}
+clap = { version = "4.5.2", features = ["derive"] }
+polars_excel_writer = "0.7.0"
 rust_xlsxwriter = "0.63.0"
+embed-resource = "2.4.1"
 itertools = "0.12.1"
 thiserror = "1.0.57"
-polars_excel_writer = "0.7.0"
-
+calamine = "0.24.0"
+rfd = "0.14.0"
 
 [profile.release]
-# opt-level = "z"
+opt-level = "z"
 lto = "thin"
 
 [profile.opt]
@@ -25,5 +28,4 @@ inherits = "release"
 lto = "fat"
 codegen-units = 1
 strip = true
-# strip = "debuginfo" # TODO: or strip = true
 opt-level = 3

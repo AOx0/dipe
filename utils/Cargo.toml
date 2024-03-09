@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 calamine.workspace = true
 itertools.workspace = true
-clap = { version = "4.5.2", features = ["derive"] }
+clap.workspace = true
