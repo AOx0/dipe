@@ -9,6 +9,7 @@
 
 ### Bins
 
+- `anuies`: Get all career relations
 - `completions`: Completion scripts for the fish shell.
 - `icups`: Atomate icups crunch
   - `profes`
