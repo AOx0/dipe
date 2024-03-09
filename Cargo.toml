@@ -2,12 +2,15 @@
 members = [
     "polars_sheet_reader",
     "strings",
+    "sheet-utils",
+    "icups_profes",
 ]
 resolver = "2"
 
 [workspace.dependencies]
 calamine = "0.24.0"
-polars = { version = "0.38.1", default-features = false, features = ["lazy", "strings", "regex", "fmt", "dtype-slim"]}
-rust_xlsxwriter = { version = "0.63.0", features = ["polars"] }
+polars = { version = "0.37.0", default-features = false, features = ["lazy", "strings", "regex", "polars-io"]}
+rust_xlsxwriter = "0.63.0"
 itertools = "0.12.1"
 thiserror = "1.0.57"
+polars_excel_writer = "0.7.0"
