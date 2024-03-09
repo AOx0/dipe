@@ -2,8 +2,8 @@
 members = [
     "polars_sheet_reader",
     "strings",
-    "sheet-utils",
-    "icups_profes",
+    "utils",
+    "icups",
 ]
 resolver = "2"
 
