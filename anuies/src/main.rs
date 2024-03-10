@@ -7,8 +7,8 @@
 
 use calamine::{open_workbook, Data, DataRef, DataType, Range, Reader};
 use clap::Parser;
+use dialogs::{ask_open_file, ask_open_files, ask_save_file};
 use itertools::{chain, izip, Itertools};
-use rfd::{FileDialog, MessageDialog, MessageLevel};
 use rust_xlsxwriter::Workbook;
 use std::collections::{HashMap, HashSet};
 use std::ops::Not;
@@ -226,9 +226,9 @@ fn read_config_xlsx(ruta: &std::path::Path) -> Config {
 
 fn main() {
     let Args {
-        mut rutas,
-        mut salida,
-        mut config,
+        rutas,
+        salida,
+        config,
     } = Args::parse();
 
     let from_cli = !rutas.is_empty() || salida.is_some() || config.is_some();
@@ -237,32 +237,17 @@ fn main() {
         eprintln!("No se ha especificado el archivo de universidades");
         std::process::exit(1);
     }
-    if config.is_none() {
-        loop {
-            let dialog = FileDialog::new()
-                .set_title("Selecciona el archivo de configuración")
-                .set_directory(std::env::current_dir().unwrap())
-                .add_filter("Excel", &["xlsx"]);
-
-            let Some(new_universidades) = dialog.pick_file() else {
-                let salir = rfd::MessageDialog::new()
-                    .set_title("No seleccionó nada")
-                    .set_description("No seleccionó nada ¿Deseas cancelar y salir?")
-                    .set_buttons(rfd::MessageButtons::YesNo)
-                    .show();
-
-                if salir == rfd::MessageDialogResult::Yes {
-                    std::process::exit(0);
-                }
-                continue;
-            };
-
-            config = Some(new_universidades);
-            break;
+    let config = if let Some(config) = config {
+        config
+    } else {
+        match ask_open_file(
+            "Selecciona el archivo de configuration en Excel",
+            Some(&[("Excel", &["xlsx"])]),
+        ) {
+            Some(path) => path,
+            None => return,
         }
-    }
-
-    let config = config.unwrap();
+    };
 
     let config = read_config_xlsx(&config);
 
@@ -270,62 +255,33 @@ fn main() {
         eprintln!("No se han especificado rutas");
         std::process::exit(1);
     }
-    if rutas.is_empty() {
-        loop {
-            let Some(new_rutas) = FileDialog::new()
-                .set_title("Selecciona los archivos a procesar")
-                .set_directory(std::env::current_dir().unwrap())
-                .add_filter("Excel", &["xlsx"])
-                .pick_files()
-            else {
-                let salir = rfd::MessageDialog::new()
-                    .set_title("No seleccionó nada")
-                    .set_description("No seleccionó nada ¿Deseas cancelar y salir?")
-                    .set_buttons(rfd::MessageButtons::YesNo)
-                    .show();
-
-                if salir == rfd::MessageDialogResult::Yes {
-                    std::process::exit(0);
-                }
-                continue;
-            };
-
-            rutas = new_rutas;
-            break;
+    let rutas = if rutas.is_empty() {
+        match ask_open_files(
+            "Selecciona los archivos de ANUIES a procesar",
+            Some(&[("Excel", &["xlsx"])]),
+        ) {
+            Some(path) => path,
+            None => return,
         }
-    }
+    } else {
+        rutas
+    };
 
     if salida.is_none() && from_cli {
         eprintln!("No se ha especificado un archivo de salida");
         std::process::exit(1);
     }
-    if salida.is_none() {
-        loop {
-            let dialog = FileDialog::new()
-                .set_title("Selecciona el archivo de salida")
-                .set_directory(std::env::current_dir().unwrap())
-                .add_filter("Excel", &["xlsx"])
-                .save_file();
-
-            let Some(new_output) = dialog else {
-                let salir = rfd::MessageDialog::new()
-                    .set_title("No seleccionó nada")
-                    .set_description("No seleccionó nada ¿Deseas cancelar y salir?")
-                    .set_buttons(rfd::MessageButtons::YesNo)
-                    .show();
-
-                if salir == rfd::MessageDialogResult::Yes {
-                    std::process::exit(0);
-                }
-                continue;
-            };
-
-            salida = Some(new_output);
-            break;
+    let output = if let Some(output) = salida {
+        output
+    } else {
+        match ask_save_file(
+            "Selecciona cómo almacenar el resultado",
+            Some(&[("Excel", &["xlsx"])]),
+        ) {
+            Some(path) => path,
+            None => return,
         }
-    }
-
-    let output = salida.unwrap();
+    };
 
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
@@ -446,8 +402,8 @@ fn main() {
     }
 
     workbook.save(&output).unwrap();
-    MessageDialog::new()
-        .set_level(MessageLevel::Info)
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Info)
         .set_title("Listo")
         .show();
 }

@@ -5,6 +5,7 @@ members = [
     "utils",
     "icups", 
     "anuies",
+    "dialogs",
 ]
 resolver = "2"
 

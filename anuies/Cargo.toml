@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 calamine.workspace = true
+dialogs = { path = "../dialogs/" }
 rfd.workspace = true
 rust_xlsxwriter.workspace = true
 itertools.workspace = true

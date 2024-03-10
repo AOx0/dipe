@@ -105,6 +105,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "clap",
+ "dialogs",
  "embed-resource",
  "itertools",
  "rfd",
@@ -691,6 +692,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "dialogs"
+version = "0.1.0"
+dependencies = [
+ "rfd",
 ]
 
 [[package]]
