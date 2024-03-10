@@ -19,6 +19,7 @@ itertools = "0.12.1"
 thiserror = "1.0.57"
 calamine = "0.24.0"
 rfd = "0.14.0"
+bstr = { version = "1.9.1", features = ["alloc"]}
 
 [profile.release]
 opt-level = "z"

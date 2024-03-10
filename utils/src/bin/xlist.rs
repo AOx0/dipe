@@ -1,7 +1,9 @@
-use std::{collections::BTreeSet, ops::Not, path::PathBuf};
-
+use bstr::ByteSlice;
 use calamine::{open_workbook_auto, DataType, Reader};
 use clap::{Parser, Subcommand};
+use rust_xlsxwriter::{Workbook, Worksheet};
+use std::io::Write;
+use std::{collections::BTreeSet, ops::Not, path::PathBuf};
 
 #[derive(Parser)]
 struct Args {
@@ -31,6 +33,9 @@ enum Command {
         sheet: String,
         /// The headers to scan for unique values
         headers: Vec<String>,
+        /// Path to save the result. The file extension matters
+        #[clap(short, long)]
+        save: Option<PathBuf>,
     },
 }
 
@@ -72,6 +77,7 @@ fn main() {
             path,
             sheet,
             headers,
+            save,
         } => {
             let mut sheets = open_workbook_auto(path).unwrap();
             let Ok(sheet) = sheets.worksheet_range(&sheet) else {
@@ -131,7 +137,54 @@ fn main() {
             vfinal.push(headers);
             vfinal.extend(finals.into_iter().collect::<BTreeSet<Vec<_>>>());
 
-            println!("{vfinal:#?}")
+            let Some(save_path) = save else {
+                println!("{vfinal:#?}");
+                return;
+            };
+
+            match save_path
+                .as_os_str()
+                .as_encoded_bytes()
+                .rsplit_once_str(".")
+            {
+                Some((_, ext)) => match ext {
+                    b"csv" => {
+                        let mut file = std::fs::File::create(save_path).unwrap();
+                        for vec in vfinal {
+                            for (i, v) in vec.iter().enumerate() {
+                                if i < vec.len() - 1 {
+                                    write!(file, "{v:#?},").unwrap();
+                                } else {
+                                    write!(file, "{v:#?}").unwrap();
+                                }
+                            }
+                            writeln!(file).unwrap();
+                        }
+                    }
+                    b"xlsx" => {
+                        let mut workook = Workbook::new();
+                        let mut worksheet = Worksheet::new();
+                        worksheet.set_name("Uniques").unwrap();
+
+                        for (row, values) in vfinal.iter().enumerate() {
+                            for (col, value) in values.iter().enumerate() {
+                                worksheet
+                                    .write(row.try_into().unwrap(), col.try_into().unwrap(), value)
+                                    .unwrap();
+                            }
+                        }
+
+                        workook.push_worksheet(worksheet);
+                        workook.save(save_path).unwrap();
+                    }
+                    _ => {
+                        eprintln!("Invalid extension {ext:#?}");
+                    }
+                },
+                None => {
+                    eprintln!("Error: El archivo no tiene extensión")
+                }
+            }
         }
     }
 }

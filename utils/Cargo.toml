@@ -1,5 +1,5 @@
 [package]
-name = "sheet-utils"
+name = "utils"
 version = "0.0.0"
 edition = "2021"
 
@@ -8,13 +8,13 @@ edition = "2021"
 [dependencies]
 rust_xlsxwriter.workspace = true
 thiserror.workspace = true
-calamine.workspace = true
 itertools.workspace = true
+calamine.workspace = true
+bstr.workspace = true
 clap.workspace = true
 rfd.workspace = true
 strings = { path = "../strings/" }
 walkdir = "2.4.0"
-bstr = "1.9.0"
 
 [build-dependencies]
 embed-resource.workspace = true
