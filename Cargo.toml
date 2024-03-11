@@ -1,3 +1,4 @@
+cargo-features = ["codegen-backend"]
 [workspace]
 members = [
     "psr",
@@ -10,7 +11,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-polars = { version = "0.37.0", default-features = false, features = ["lazy", "strings", "regex", "polars-io"]}
+polars = { version = "0.37.0", default-features = false, features = ["lazy", "strings", "regex", "polars-io", "dtype-struct"]}
 clap = { version = "4.5.2", features = ["derive"] }
 polars_excel_writer = "0.7.0"
 rust_xlsxwriter = "0.63.0"
@@ -22,12 +23,14 @@ rfd = "0.14.0"
 bstr = { version = "1.9.1", features = ["alloc"]}
 
 [profile.release]
-opt-level = "z"
-lto = "thin"
-
-[profile.opt]
-inherits = "release"
-lto = "fat"
-codegen-units = 1
-strip = true
 opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true
+
+[profile.dev]
+debug = true
+codegen-backend = "cranelift"
+opt-level = 0

@@ -1061,9 +1061,11 @@ name = "icups_profes"
 version = "0.0.0"
 dependencies = [
  "calamine",
+ "itertools",
  "polars",
  "polars_excel_writer",
  "polars_sheet_reader",
+ "strings",
 ]
 
 [[package]]

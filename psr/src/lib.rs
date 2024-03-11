@@ -75,6 +75,59 @@ pub fn read_set_from_sheet<R: Reader<BufReader<File>>>(
     Ok(res)
 }
 
+/// Read a sheet with two columns as a `HashMap`<Column1, Column2>
+///
+/// # Panics
+///
+/// Panics if the sheet does not have two columns
+///
+/// # Errors
+///
+/// This function will return an error if theres an error opening the tabular file or while opening the sheet by name (i.e. a sheet with that name does not exist)
+pub fn read_set_from_sheet_at<R: Reader<BufReader<File>>>(
+    path: impl AsRef<Path>,
+    pos: usize,
+    has_header: bool,
+) -> ReaderResult<HashMap<String, String>> {
+    let mut res = HashMap::new();
+    let mut excel: R = open_workbook(path.as_ref())
+        .map_err(|e| ReaderError::OpenWorkbook(path.as_ref().to_path_buf(), format!("{e:?}")))?;
+    let binding = excel.sheet_names();
+    let Some(sheet) = binding.get(pos) else {
+        return ReaderResult::Err(ReaderError::OpenWorksheet(
+            format!("No such sheet at pos {pos:?}"),
+            format!("A sheet in the nth position {pos:?} does not exist"),
+        ));
+    };
+    let range = excel
+        .worksheet_range(sheet)
+        .map_err(|e| ReaderError::OpenWorksheet(sheet.to_string(), format!("{e:?}")))?;
+
+    let mut row = range.rows().map(|c| {
+        if let [k, v, ..] = c {
+            (k, v)
+        } else {
+            panic!("Expected a sheet with two columns")
+        }
+    });
+
+    if has_header {
+        row.next();
+    }
+
+    for (k, v) in row {
+        let k = ref_to_string(k);
+        let v = ref_to_string(v);
+
+        let k = sanitize_spaces(k.trim());
+        let v = sanitize_spaces(v.trim());
+
+        res.insert(k, v);
+    }
+
+    Ok(res)
+}
+
 #[derive(Error, Debug)]
 pub enum ReaderError {
     #[error("failed to open workbook at `{0:?}` with `{1}`")]
@@ -126,6 +179,33 @@ where
 {
     let mut excel: R = open_workbook(path.as_ref())
         .map_err(|e| ReaderError::OpenWorkbook(path.as_ref().to_path_buf(), format!("{e:?}")))?;
+
+    read_sheet_from_sheets(&mut excel, sheet)
+}
+
+/// Read the nth sheet from the path `path`
+///
+/// # Errors
+///
+/// This function will return an error if theres an error opening sheets, workbooks or while
+/// adding columns into dataframes
+pub fn read_sheet_nth<P, R>(path: P, nth: usize) -> ReaderResult<DataFrame>
+where
+    R: Reader<BufReader<File>>,
+    P: AsRef<Path>,
+{
+    let mut excel: R = open_workbook(path.as_ref())
+        .map_err(|e| ReaderError::OpenWorkbook(path.as_ref().to_path_buf(), format!("{e:?}")))?;
+    let binding = excel.sheet_names();
+    let sheet = binding.get(nth).ok_or({
+        ReaderError::OpenWorksheet(
+            format!("No nth sheet {nth:?}"),
+            format!(
+                "The sheet {:?} does not have a nth sheet {nth}",
+                path.as_ref().display()
+            ),
+        )
+    })?;
 
     read_sheet_from_sheets(&mut excel, sheet)
 }

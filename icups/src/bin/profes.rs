@@ -1,12 +1,27 @@
+use ::strings::{sanitize_spaces, sanitize_spaces_iter};
 use calamine::Xlsx;
-use polars::{lazy::dsl::*, prelude::*};
+use core::panic;
+use itertools::{izip, Itertools};
+use polars::{lazy::dsl::*, prelude::*, time::chunkedarray::string::AsString};
 use polars_excel_writer::PolarsXlsxWriter;
-use polars_sheet_reader::{read_set_from_sheet, read_sheet};
+use polars_sheet_reader::{read_set_from_sheet, read_sheet, read_sheet_nth};
 use std::{path::PathBuf, str::FromStr};
 
 fn main() {
     let mut args = std::env::args();
     let ruta = if let Some(ruta) = args.nth(1) {
+        PathBuf::from_str(&ruta).unwrap()
+    } else {
+        return;
+    };
+
+    let idiomas = if let Some(ruta) = args.next() {
+        PathBuf::from_str(&ruta).unwrap()
+    } else {
+        return;
+    };
+
+    let personal = if let Some(ruta) = args.next() {
         PathBuf::from_str(&ruta).unwrap()
     } else {
         return;
@@ -18,32 +33,172 @@ fn main() {
         return;
     };
 
-    let df = read_sheet::<_, Xlsx<_>>(ruta, "TITULARES").unwrap();
-    let mapper = read_set_from_sheet::<Xlsx<_>>(&config, "Config", false).unwrap();
+    let df = read_sheet_nth::<_, Xlsx<_>>(ruta, 0).unwrap();
+    let profes_idioma = read_sheet_nth::<_, Xlsx<_>>(idiomas, 0).unwrap();
+    let direccion_personal = read_sheet_nth::<_, Xlsx<_>>(personal, 2).unwrap();
 
-    let df = df
+    let area_mapper = read_set_from_sheet::<Xlsx<_>>(&config, "Uniques", false).unwrap();
+    let ciudad_mapper = read_set_from_sheet::<Xlsx<_>>(&config, "Pais", false).unwrap();
+
+    let direccion_personal = direccion_personal
         .lazy()
-        .with_column(col("Área RRHH").map(
+        .with_column(col("Ciudad o País").map(
             move |s| {
-                Ok(Some(Series::from_iter(s.iter().map(|val| {
-                    if let AnyValue::String(s) = val {
-                        let v = if let Some(v) = mapper.get(s) {
-                            v
-                        } else {
-                            println!("Warning: Llave no encontrada {s:?}");
-                            "Otro"
-                        };
-
-                        v.to_string()
-                    } else {
-                        "Otro".to_string()
-                    }
-                }))))
+                Ok(Some(Series::from_iter(s.str().unwrap().into_iter().map(
+                    |v| {
+                        v.map(|s| {
+                            ciudad_mapper
+                                .get(s)
+                                .map(|a| a.as_str())
+                                .unwrap_or_else(|| {
+                                    println!("Value not found {s:?}");
+                                    "OTRO"
+                                })
+                                .to_string()
+                        })
+                        .unwrap_or_default()
+                    },
+                ))))
             },
             GetOutput::from_type(DataType::String),
         ))
         .collect()
         .unwrap();
+
+    // Convertimos los IDs en UInt64
+    let (df, profes, direccion_personal) = {
+        let df = df
+            .lazy()
+            .with_columns(&[
+                col("Id Profesor").cast(DataType::UInt64),
+                col("Class Id").cast(DataType::UInt64),
+                col("Id Curso").cast(DataType::UInt64),
+            ])
+            .collect()
+            .unwrap();
+
+        let direccion_personal = direccion_personal
+            .lazy()
+            .with_column(col("ID del profesor que cuenta con posgrado").cast(DataType::UInt64))
+            .select([
+                col("ID del profesor que cuenta con posgrado"),
+                col("Ciudad o País"),
+            ])
+            .collect()
+            .unwrap();
+
+        let profes_idioma = profes_idioma
+            .lazy()
+            .with_columns(&[
+                col("Id Profesor")
+                    .str()
+                    .strip_chars(lit(" "))
+                    .cast(DataType::UInt64),
+                col("Class ID")
+                    .str()
+                    .strip_chars(lit(" "))
+                    .cast(DataType::UInt64),
+                col("ID Curso")
+                    .str()
+                    .strip_chars(lit(" "))
+                    .cast(DataType::UInt64),
+            ])
+            .select([
+                col("Id Profesor"),
+                col("ID Curso"),
+                col("Class ID"),
+                col("Idioma"),
+            ])
+            .collect()
+            .unwrap();
+
+        (df, profes_idioma, direccion_personal)
+    };
+
+    let df = df
+        .join(
+            &profes,
+            &["Id Profesor", "Class Id", "Id Curso"],
+            &["Id Profesor", "Class ID", "ID Curso"],
+            JoinArgs::new(JoinType::Left),
+        )
+        .unwrap();
+
+    let df = df
+        .join(
+            &direccion_personal,
+            &["Id Profesor"],
+            &["ID del profesor que cuenta con posgrado"],
+            JoinArgs::new(JoinType::Left),
+        )
+        .unwrap();
+
+    // let meds = read_set_from_sheet::<Xlsx<_>>(&config, "Medicina", false).unwrap();
+
+    let df = df
+        .lazy()
+        .with_column(
+            col("Área RRHH")
+                .map(
+                    move |s| {
+                        Ok(Some(Series::from_iter(s.iter().map(|val| {
+                            if let AnyValue::String(s) = val {
+                                let v = if let Some(v) = area_mapper.get(s) {
+                                    v
+                                } else {
+                                    println!("Warning: Llave no encontrada {s:#?}");
+                                    "OTRO"
+                                };
+
+                                v.to_string()
+                            } else {
+                                "OTRO".to_string()
+                            }
+                        }))))
+                    },
+                    GetOutput::from_type(DataType::String),
+                )
+                .alias("C Área RRHH"),
+        )
+        .collect()
+        .unwrap();
+
+    let df = df
+        .clone()
+        .lazy()
+        .with_columns(
+            &[as_struct(vec![col("Grupo Académico"), col("C Área RRHH")])
+                .apply(
+                    move |s| {
+                        let ca = s.struct_()?;
+                        let s_grupo = &ca.fields()[0];
+                        let s_mat = &ca.fields()[1];
+
+                        let ca_grupo = s_grupo.str()?;
+                        let ca_mat = s_mat.str()?;
+
+                        let out: StringChunked = izip!(ca_grupo, ca_mat)
+                            .map(|(grupo, area)| {
+                                if grupo.is_some_and(|a| a == "CSAL")
+                                    && area.is_some_and(|a| a.starts_with("CSAL"))
+                                {
+                                    area
+                                } else {
+                                    grupo
+                                }
+                            })
+                            .collect();
+
+                        Ok(Some(out.into_series()))
+                    },
+                    GetOutput::from_type(DataType::String),
+                )
+                .alias("Grupo Académico")],
+        )
+        .collect()
+        .unwrap();
+
+    // println!("{df:?}");
 
     let horas_profesor = df
         .clone()
@@ -75,6 +230,26 @@ fn main() {
         .collect()
         .unwrap();
 
+    let df2 = df
+        .clone()
+        .lazy()
+        .select(&[
+            col("Institución"),
+            col("Grupo Académico"),
+            // col("Grupo Académico 2"),
+            col("C Área RRHH"),
+            col("Área RRHH"),
+            col("Id Profesor"),
+            col("Tipo de contrato"),
+            // col("Materia"),
+        ])
+        // .filter(col("Tipo de contrato").eq(lit("Planta")))
+        .unique(None, UniqueKeepStrategy::First)
+        .collect()
+        .unwrap();
+
+    write_xlsx(df2, "temps.xlsx");
+
     let df = df
         .lazy()
         .group_by(["Institución", "Grupo Académico"])
@@ -83,6 +258,20 @@ fn main() {
             col("Id Profesor")
                 .n_unique()
                 .alias("Total profesores que imparten clases en la Escuela o Facultad"),
+            col("Id Profesor")
+                .filter(col("Ciudad o País") == lit("USA") || col("Ciudad o País") == lit("UE"))
+                .n_unique()
+                .alias("Doctorados en Europa Y USA"),
+            col("Id Profesor")
+                .filter(
+                    col("Ciudad ")
+                        .str()
+                        .strip_chars(lit(""))
+                        .str()
+                        .contains_literal(lit("INGLES")),
+                )
+                .n_unique()
+                .alias("Profesores que imparten clases en inglés"),
             // Todos los profesores que tienen un contrato de tiempo completo
             col("Id Profesor")
                 .filter(col("Tipo de contrato").neq(lit("Asignatura")))
@@ -93,7 +282,7 @@ fn main() {
                 .filter(
                     col("Tipo de contrato")
                         .neq(lit("Asignatura"))
-                        .and(col("Grupo Académico").eq(col("Área RRHH"))),
+                        .and(col("Grupo Académico").eq(col("C Área RRHH"))),
                 )
                 .n_unique()
                 .alias("PTC que pertenecen a la Escuela o Facultad y dan clases"),
@@ -161,7 +350,7 @@ fn main() {
             // col("% PTC capacitados para impartir clases en inglés"),
             col("PTC Doctores"),
             // col("Doctorados en Europa Y USA"),
-            // col("Profesores que imparten clases en inglés"),
+            col("Profesores que imparten clases en inglés"),
             // col("PTC capacitados para impartir clases en inglés"),
             col("Horas PTC"),
             col("Horas Totales"),
@@ -173,7 +362,13 @@ fn main() {
         .sort(["Institución", "Grupo Académico"], false, false)
         .unwrap();
 
+    let df = df.fill_null(FillNullStrategy::Zero).unwrap();
+
+    write_xlsx(df, "dataframe.xlsx");
+}
+
+fn write_xlsx(df: DataFrame, name: &str) {
     let mut writer = PolarsXlsxWriter::new();
     writer.write_dataframe(&df).unwrap();
-    writer.save("dataframe.xlsx").unwrap();
+    writer.save(name).unwrap();
 }
