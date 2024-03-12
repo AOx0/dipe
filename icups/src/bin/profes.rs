@@ -1,8 +1,6 @@
-use ::strings::{sanitize_spaces, sanitize_spaces_iter};
 use calamine::Xlsx;
-use core::panic;
-use itertools::{izip, Itertools};
-use polars::{lazy::dsl::*, prelude::*, time::chunkedarray::string::AsString};
+use itertools::izip;
+use polars::{lazy::dsl::*, prelude::*};
 use polars_excel_writer::PolarsXlsxWriter;
 use polars_sheet_reader::{read_set_from_sheet, read_sheet, read_sheet_nth};
 use std::{path::PathBuf, str::FromStr};
@@ -27,6 +25,12 @@ fn main() {
         return;
     };
 
+    let capacitados = if let Some(ruta) = args.next() {
+        PathBuf::from_str(&ruta).unwrap()
+    } else {
+        return;
+    };
+
     let config = if let Some(ruta) = args.next() {
         PathBuf::from_str(&ruta).unwrap()
     } else {
@@ -36,6 +40,7 @@ fn main() {
     let df = read_sheet_nth::<_, Xlsx<_>>(ruta, 0).unwrap();
     let profes_idioma = read_sheet_nth::<_, Xlsx<_>>(idiomas, 0).unwrap();
     let direccion_personal = read_sheet_nth::<_, Xlsx<_>>(personal, 2).unwrap();
+    let capacitados = read_sheet::<_, Xlsx<_>>(capacitados, "IG-3").unwrap();
 
     let area_mapper = read_set_from_sheet::<Xlsx<_>>(&config, "Uniques", false).unwrap();
     let ciudad_mapper = read_set_from_sheet::<Xlsx<_>>(&config, "Pais", false).unwrap();
@@ -49,7 +54,10 @@ fn main() {
                         v.map(|s| {
                             ciudad_mapper
                                 .get(s)
-                                .map(|a| a.as_str())
+                                .map(|a| {
+                                    // println!("{a:?}");
+                                    a.as_str()
+                                })
                                 .unwrap_or_else(|| {
                                     println!("Value not found {s:?}");
                                     "OTRO"
@@ -66,7 +74,7 @@ fn main() {
         .unwrap();
 
     // Convertimos los IDs en UInt64
-    let (df, profes, direccion_personal) = {
+    let (df, profes, direccion_personal, capacitados) = {
         let df = df
             .lazy()
             .with_columns(&[
@@ -79,10 +87,43 @@ fn main() {
 
         let direccion_personal = direccion_personal
             .lazy()
-            .with_column(col("ID del profesor que cuenta con posgrado").cast(DataType::UInt64))
+            .with_column(
+                col("ID del profesor que cuenta con posgrado")
+                    .str()
+                    .strip_chars(lit(" "))
+                    .cast(DataType::UInt64),
+            )
             .select([
                 col("ID del profesor que cuenta con posgrado"),
                 col("Ciudad o País"),
+                col("Último grado obtenido"),
+            ])
+            .collect()
+            .unwrap();
+
+        let capacitados = capacitados
+            .lazy()
+            .filter(
+                col("Nombre(s) del profesor")
+                    .str()
+                    .strip_chars(lit(" "))
+                    .str()
+                    .len_chars()
+                    .neq(lit(0)),
+            )
+            .select([
+                col("Escuela o Facultad").alias("Grupo Académico"),
+                col("Campus").alias("Institución"),
+                col("Idioma diferente al español en que puede impartir clase"),
+                col("Nombre(s) del profesor"),
+                col("Apellido paterno del profesor"),
+                col("Apellido materno de profesor"),
+            ])
+            .unique(None, UniqueKeepStrategy::First)
+            .select([
+                col("Grupo Académico"),
+                col("Institución"),
+                col("Idioma diferente al español en que puede impartir clase"),
             ])
             .collect()
             .unwrap();
@@ -112,8 +153,31 @@ fn main() {
             .collect()
             .unwrap();
 
-        (df, profes_idioma, direccion_personal)
+        (df, profes_idioma, direccion_personal, capacitados)
     };
+
+    // let df = df.lazy().with_column(
+    //     as_struct([""])
+    // )
+
+    let capacitados = capacitados
+        .lazy()
+        .group_by(&[col("Institución"), col("Grupo Académico")])
+        .agg([
+            col("Idioma diferente al español en que puede impartir clase")
+                .filter(
+                    col("Idioma diferente al español en que puede impartir clase")
+                        .str()
+                        .strip_chars(lit(" "))
+                        .str()
+                        .len_chars()
+                        .neq(0),
+                )
+                .n_unique()
+                .alias("PTC capacitados para impartir clases en inglés"),
+        ])
+        .collect()
+        .unwrap();
 
     let df = df
         .join(
@@ -258,13 +322,24 @@ fn main() {
             col("Id Profesor")
                 .n_unique()
                 .alias("Total profesores que imparten clases en la Escuela o Facultad"),
-            col("Id Profesor")
-                .filter(col("Ciudad o País") == lit("USA") || col("Ciudad o País") == lit("UE"))
-                .n_unique()
-                .alias("Doctorados en Europa Y USA"),
+            // Numero de profesores que son de timepo completo con grado de doctor en usa o europa
             col("Id Profesor")
                 .filter(
-                    col("Ciudad ")
+                    col("Último grado obtenido")
+                        .str()
+                        .contains_literal(lit("octor")),
+                )
+                .filter(
+                    col("Ciudad o País")
+                        .eq(lit("USA"))
+                        .or(col("Ciudad o País").eq(lit("UE"))),
+                )
+                .n_unique()
+                .alias("Doctorados en Europa Y USA"),
+            // Numero de profesores que tienen una clase marcada como ingles
+            col("Id Profesor")
+                .filter(
+                    col("Idioma")
                         .str()
                         .strip_chars(lit(""))
                         .str()
@@ -306,7 +381,16 @@ fn main() {
             &horas_profesor,
             ["Institución", "Grupo Académico"],
             ["Institución", "Grupo Académico"],
-            JoinArgs::new(JoinType::Inner),
+            JoinArgs::new(JoinType::Left),
+        )
+        .unwrap();
+
+    let df = df
+        .join(
+            &capacitados,
+            ["Institución", "Grupo Académico"],
+            ["Institución", "Grupo Académico"],
+            JoinArgs::new(JoinType::Left),
         )
         .unwrap();
 
@@ -321,6 +405,19 @@ fn main() {
                     .cast(DataType::Float64))
                 * lit(100.0))
             .alias("% PTC"),
+            (col("Doctorados en Europa Y USA").cast(DataType::Float64)
+                / col("PTC Doctores").cast(DataType::Float64)
+                * lit(100.0))
+            .alias("% PTC con doctorados en Europa y USA"),
+            (col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
+                / col("Total profesores que imparten clases en la Escuela o Facultad")
+                    .cast(DataType::Float64)
+                * lit(100.0))
+            .alias("% PTC imparten clases en inglés"),
+            (col("PTC capacitados para impartir clases en inglés").cast(DataType::Float64)
+                / col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
+                * lit(100.0))
+            .alias("% PTC capacitados para impartir clases en inglés"),
             (col("PTC Doctores").cast(DataType::Float64)
                 / col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
                 * lit(100.0))
@@ -345,13 +442,13 @@ fn main() {
             col("% PTC"),
             col("% hrs impartidas por PTC"),
             col("% PTC con doctorado"),
-            // col("% doctorados en Europa y USA"),
-            // col("% PTC imparten clases en inglés"),
-            // col("% PTC capacitados para impartir clases en inglés"),
+            col("% PTC con doctorados en Europa y USA"),
+            col("% PTC imparten clases en inglés"),
+            col("% PTC capacitados para impartir clases en inglés"),
             col("PTC Doctores"),
-            // col("Doctorados en Europa Y USA"),
+            col("Doctorados en Europa Y USA"),
             col("Profesores que imparten clases en inglés"),
-            // col("PTC capacitados para impartir clases en inglés"),
+            col("PTC capacitados para impartir clases en inglés"),
             col("Horas PTC"),
             col("Horas Totales"),
         ])

@@ -25,6 +25,24 @@ pub fn space_join<'a>(mut iter: impl Iterator<Item = &'a str>) -> impl Iterator<
     }
 }
 
+/// Compare the first letter of each word
+pub fn compare_words(slice: &str, with: &str) -> bool {
+    let words1 = get_words(slice);
+    let words2 = get_words(with);
+
+    let first_chars1 = n_chars(words1, 1);
+    let first_chars2 = n_chars(words2, 1);
+
+    first_chars1.eq(first_chars2)
+}
+
+fn n_chars<'a>(
+    word: impl Iterator<Item = &'a str> + 'a,
+    n: usize,
+) -> impl Iterator<Item = char> + 'a {
+    word.flat_map(move |w| w.chars().take(n).filter_map(|c| c.to_lowercase().next()))
+}
+
 /// Iterator that yields each word in a string with a space between each one
 ///
 /// # Examples
@@ -111,5 +129,33 @@ mod tests {
             expect.iter().collect::<Vec<_>>(),
             get_words(inp).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn take_chars_2() {
+        let str = "Hola me llamo daniel";
+        let expected = &['h', 'o', 'm', 'e', 'l', 'l', 'd', 'a'];
+
+        let res = n_chars(get_words(str), 2).collect::<Vec<_>>();
+
+        assert_eq!(res.as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn take_chars_spaces_2() {
+        let str = "Hola me llamo Daniel";
+        let expected = &['h', 'o', ' ', 'm', 'e', ' ', 'l', 'l', ' ', 'd', 'a'];
+
+        let res = n_chars(space_join(get_words(str)), 2).collect::<Vec<_>>();
+
+        assert_eq!(res.as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn compare() {
+        let name1 = "Juan P. Rodriguez Pérez";
+        let name2 = "Juan Pablo R. P.";
+
+        assert!(compare_words(name1, name2));
     }
 }
