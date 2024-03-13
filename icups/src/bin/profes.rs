@@ -1,3 +1,4 @@
+use ::strings::{get_words, n_chars, space_join};
 use calamine::Xlsx;
 use itertools::izip;
 use polars::{lazy::dsl::*, prelude::*};
@@ -81,6 +82,22 @@ fn main() {
                 col("Id Profesor").cast(DataType::UInt64),
                 col("Class Id").cast(DataType::UInt64),
                 col("Id Curso").cast(DataType::UInt64),
+                col("Nombre").map(
+                    |s| {
+                        Ok(Some(Series::from_iter(s.str().unwrap().into_iter().map(
+                            |a| {
+                                let a = a.unwrap_or_default();
+
+                                let (apellidos, nombres) = a.split_once(',').unwrap();
+                                let apellidos = n_chars(space_join(get_words(apellidos)), 2);
+                                let nombres = n_chars(space_join(get_words(nombres).take(1)), 2);
+
+                                String::from_iter(nombres.chain([' ']).chain(apellidos))
+                            },
+                        ))))
+                    },
+                    GetOutput::from_type(DataType::String),
+                ),
             ])
             .collect()
             .unwrap();
@@ -103,14 +120,6 @@ fn main() {
 
         let capacitados = capacitados
             .lazy()
-            .filter(
-                col("Nombre(s) del profesor")
-                    .str()
-                    .strip_chars(lit(" "))
-                    .str()
-                    .len_chars()
-                    .neq(lit(0)),
-            )
             .select([
                 col("Escuela o Facultad").alias("Grupo Académico"),
                 col("Campus").alias("Institución"),
@@ -119,11 +128,53 @@ fn main() {
                 col("Apellido paterno del profesor"),
                 col("Apellido materno de profesor"),
             ])
+            .with_column(
+                as_struct(vec![
+                    col("Nombre(s) del profesor"),
+                    col("Apellido paterno del profesor"),
+                    col("Apellido materno de profesor"),
+                ])
+                .map(
+                    |s| {
+                        let ca = s.struct_()?;
+
+                        let s_nombre = &ca.fields()[0];
+                        let s_apellido_pat = &ca.fields()[1];
+                        let s_apellido_mat = &ca.fields()[2];
+
+                        let s_nombre = s_nombre.str()?;
+                        let s_apellido_pat = s_apellido_pat.str()?;
+                        let s_apellido_mat = s_apellido_mat.str()?;
+
+                        let out: StringChunked = izip!(s_nombre, s_apellido_pat, s_apellido_mat)
+                            .map(|(nombre, pat, mat)| {
+                                let mat =
+                                    n_chars(space_join(get_words(mat.unwrap_or_default())), 2);
+                                let pat =
+                                    n_chars(space_join(get_words(pat.unwrap_or_default())), 2);
+                                let nombre = n_chars(
+                                    space_join(get_words(nombre.unwrap_or_default()).take(1)),
+                                    2,
+                                );
+
+                                String::from_iter(
+                                    nombre.chain([' ']).chain(pat).chain([' ']).chain(mat),
+                                )
+                            })
+                            .collect();
+
+                        Ok(Some(out.into_series()))
+                    },
+                    GetOutput::from_type(DataType::String),
+                )
+                .alias("Nombre"),
+            )
             .unique(None, UniqueKeepStrategy::First)
             .select([
-                col("Grupo Académico"),
-                col("Institución"),
+                // col("Grupo Académico"),
+                // col("Institución"),
                 col("Idioma diferente al español en que puede impartir clase"),
+                col("Nombre"),
             ])
             .collect()
             .unwrap();
@@ -160,24 +211,24 @@ fn main() {
     //     as_struct([""])
     // )
 
-    let capacitados = capacitados
-        .lazy()
-        .group_by(&[col("Institución"), col("Grupo Académico")])
-        .agg([
-            col("Idioma diferente al español en que puede impartir clase")
-                .filter(
-                    col("Idioma diferente al español en que puede impartir clase")
-                        .str()
-                        .strip_chars(lit(" "))
-                        .str()
-                        .len_chars()
-                        .neq(0),
-                )
-                .n_unique()
-                .alias("PTC capacitados para impartir clases en inglés"),
-        ])
-        .collect()
-        .unwrap();
+    // let capacitados = capacitados
+    //     .lazy()
+    //     .group_by(&[col("Institución"), col("Grupo Académico")])
+    //     .agg([
+    //         col("Idioma diferente al español en que puede impartir clase")
+    //             .filter(
+    //                 col("Idioma diferente al español en que puede impartir clase")
+    //                     .str()
+    //                     .strip_chars(lit(" "))
+    //                     .str()
+    //                     .len_chars()
+    //                     .neq(0),
+    //             )
+    //             .n_unique()
+    //             .alias("PTC capacitados para impartir clases en inglés"),
+    //     ])
+    //     .collect()
+    //     .unwrap();
 
     let df = df
         .join(
@@ -294,25 +345,34 @@ fn main() {
         .collect()
         .unwrap();
 
-    let df2 = df
-        .clone()
-        .lazy()
-        .select(&[
-            col("Institución"),
-            col("Grupo Académico"),
-            // col("Grupo Académico 2"),
-            col("C Área RRHH"),
-            col("Área RRHH"),
-            col("Id Profesor"),
-            col("Tipo de contrato"),
-            // col("Materia"),
-        ])
-        // .filter(col("Tipo de contrato").eq(lit("Planta")))
-        .unique(None, UniqueKeepStrategy::First)
-        .collect()
-        .unwrap();
+    // let df2 = df
+    //     .clone()
+    //     .lazy()
+    //     .select(&[
+    //         col("Institución"),
+    //         col("Grupo Académico"),
+    //         // col("Grupo Académico 2"),
+    //         col("C Área RRHH"),
+    //         col("Área RRHH"),
+    //         col("Id Profesor"),
+    //         col("Tipo de contrato"),
+    //         // col("Materia"),
+    //     ])
+    //     // .filter(col("Tipo de contrato").eq(lit("Planta")))
+    //     .unique(None, UniqueKeepStrategy::First)
+    //     .collect()
+    //     .unwrap();
 
-    write_xlsx(df2, "temps.xlsx");
+    // write_xlsx(df2, "temps.xlsx");
+
+    let df = df
+        .join(
+            &capacitados,
+            ["Nombre"],
+            ["Nombre"],
+            JoinArgs::new(JoinType::Left),
+        )
+        .unwrap();
 
     let df = df
         .lazy()
@@ -372,6 +432,17 @@ fn main() {
                 )
                 .n_unique()
                 .alias("PTC Doctores"),
+            col("Idioma diferente al español en que puede impartir clase")
+                .filter(
+                    col("Idioma diferente al español en que puede impartir clase")
+                        .str()
+                        .strip_chars(lit(" "))
+                        .str()
+                        .len_chars()
+                        .neq(0),
+                )
+                .n_unique()
+                .alias("PTC capacitados para impartir clases en inglés"),
         ])
         .collect()
         .unwrap();
@@ -379,15 +450,6 @@ fn main() {
     let df = df
         .join(
             &horas_profesor,
-            ["Institución", "Grupo Académico"],
-            ["Institución", "Grupo Académico"],
-            JoinArgs::new(JoinType::Left),
-        )
-        .unwrap();
-
-    let df = df
-        .join(
-            &capacitados,
             ["Institución", "Grupo Académico"],
             ["Institución", "Grupo Académico"],
             JoinArgs::new(JoinType::Left),

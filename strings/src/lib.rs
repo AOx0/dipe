@@ -36,7 +36,7 @@ pub fn compare_words(slice: &str, with: &str) -> bool {
     first_chars1.eq(first_chars2)
 }
 
-fn n_chars<'a>(
+pub fn n_chars<'a>(
     word: impl Iterator<Item = &'a str> + 'a,
     n: usize,
 ) -> impl Iterator<Item = char> + 'a {
