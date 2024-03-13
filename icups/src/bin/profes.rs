@@ -55,10 +55,7 @@ fn main() {
                         v.map(|s| {
                             ciudad_mapper
                                 .get(s)
-                                .map(|a| {
-                                    // println!("{a:?}");
-                                    a.as_str()
-                                })
+                                .map(|a| a.as_str())
                                 .unwrap_or_else(|| {
                                     println!("Value not found {s:?}");
                                     "OTRO"
@@ -171,8 +168,6 @@ fn main() {
             )
             .unique(None, UniqueKeepStrategy::First)
             .select([
-                // col("Grupo Académico"),
-                // col("Institución"),
                 col("Idioma diferente al español en que puede impartir clase"),
                 col("Nombre"),
             ])
@@ -207,29 +202,6 @@ fn main() {
         (df, profes_idioma, direccion_personal, capacitados)
     };
 
-    // let df = df.lazy().with_column(
-    //     as_struct([""])
-    // )
-
-    // let capacitados = capacitados
-    //     .lazy()
-    //     .group_by(&[col("Institución"), col("Grupo Académico")])
-    //     .agg([
-    //         col("Idioma diferente al español en que puede impartir clase")
-    //             .filter(
-    //                 col("Idioma diferente al español en que puede impartir clase")
-    //                     .str()
-    //                     .strip_chars(lit(" "))
-    //                     .str()
-    //                     .len_chars()
-    //                     .neq(0),
-    //             )
-    //             .n_unique()
-    //             .alias("PTC capacitados para impartir clases en inglés"),
-    //     ])
-    //     .collect()
-    //     .unwrap();
-
     let df = df
         .join(
             &profes,
@@ -247,8 +219,6 @@ fn main() {
             JoinArgs::new(JoinType::Left),
         )
         .unwrap();
-
-    // let meds = read_set_from_sheet::<Xlsx<_>>(&config, "Medicina", false).unwrap();
 
     let df = df
         .lazy()
@@ -313,8 +283,6 @@ fn main() {
         .collect()
         .unwrap();
 
-    // println!("{df:?}");
-
     let horas_profesor = df
         .clone()
         .lazy()
@@ -326,13 +294,7 @@ fn main() {
             col("Tipo de contrato"),
         ])
         .unique(None, UniqueKeepStrategy::First)
-        .group_by([
-            "Institución",
-            "Grupo Académico",
-            "Id Profesor",
-            // "Class Id",
-            // "No. Clase",
-        ])
+        .group_by(["Institución", "Grupo Académico", "Id Profesor"])
         .agg([
             col("Tot Hrs Semana").first().alias("Horas Totales"),
             col("Tot Hrs Semana")
@@ -344,26 +306,6 @@ fn main() {
         .agg([col("Horas PTC").sum(), col("Horas Totales").sum()])
         .collect()
         .unwrap();
-
-    // let df2 = df
-    //     .clone()
-    //     .lazy()
-    //     .select(&[
-    //         col("Institución"),
-    //         col("Grupo Académico"),
-    //         // col("Grupo Académico 2"),
-    //         col("C Área RRHH"),
-    //         col("Área RRHH"),
-    //         col("Id Profesor"),
-    //         col("Tipo de contrato"),
-    //         // col("Materia"),
-    //     ])
-    //     // .filter(col("Tipo de contrato").eq(lit("Planta")))
-    //     .unique(None, UniqueKeepStrategy::First)
-    //     .collect()
-    //     .unwrap();
-
-    // write_xlsx(df2, "temps.xlsx");
 
     let df = df
         .join(
@@ -462,31 +404,25 @@ fn main() {
             (col("PTC que imparten clases en la Escuela o Facultad")
                 - col("PTC que pertenecen a la Escuela o Facultad y dan clases"))
             .alias("PTC de otras áreas que dan clases en la Escuela o Facultad"),
-            ((col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
+            (col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
                 / col("Total profesores que imparten clases en la Escuela o Facultad")
                     .cast(DataType::Float64))
-                * lit(100.0))
             .alias("% PTC"),
             (col("Doctorados en Europa Y USA").cast(DataType::Float64)
-                / col("PTC Doctores").cast(DataType::Float64)
-                * lit(100.0))
+                / col("PTC Doctores").cast(DataType::Float64))
             .alias("% PTC con doctorados en Europa y USA"),
             (col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
                 / col("Total profesores que imparten clases en la Escuela o Facultad")
-                    .cast(DataType::Float64)
-                * lit(100.0))
+                    .cast(DataType::Float64))
             .alias("% PTC imparten clases en inglés"),
             (col("PTC capacitados para impartir clases en inglés").cast(DataType::Float64)
-                / col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
-                * lit(100.0))
+                / col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64))
             .alias("% PTC capacitados para impartir clases en inglés"),
             (col("PTC Doctores").cast(DataType::Float64)
-                / col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64)
-                * lit(100.0))
+                / col("PTC que imparten clases en la Escuela o Facultad").cast(DataType::Float64))
             .alias("% PTC con doctorado"),
             (col("Horas PTC").cast(DataType::Float64)
-                / col("Horas Totales").cast(DataType::Float64)
-                * lit(100))
+                / col("Horas Totales").cast(DataType::Float64))
             .alias("% hrs impartidas por PTC"),
         ])
         .collect()
