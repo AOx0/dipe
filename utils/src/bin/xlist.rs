@@ -37,15 +37,28 @@ enum Command {
         #[clap(short, long)]
         save: Option<PathBuf>,
     },
+    #[clap(hide = true)]
+    CompleteSheets { path: PathBuf },
 }
 
 fn main() {
     let Args { command } = Args::parse();
 
     match command {
-        Command::Sheets { path } => {
+        Command::CompleteSheets { ref path } | Command::Sheets { ref path } => {
             let sheets = open_workbook_auto(path).unwrap();
-            println!("{:#?}", sheets.sheet_names())
+            let sheets = sheets.sheet_names();
+            if let Command::Sheets { .. } = command {
+                println!("{:#?}", sheets)
+            } else {
+                for (i, sheet) in sheets.iter().enumerate() {
+                    print!("{sheet:?}");
+                    if i + 1 < sheets.len() {
+                        print!(" ");
+                    }
+                }
+                println!()
+            }
         }
         Command::Headers { path, sheet } => {
             let mut sheets = open_workbook_auto(path).unwrap();
