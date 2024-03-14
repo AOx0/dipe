@@ -18,8 +18,18 @@ end
 function __fish_xlist_complete_sheets
     set -l contains (__fish_xlist_contains_sheets)
 
-    if [ "$contains" = n ]
-        xlist complete-sheets $cmd_args 2>/dev/null | tr " " "\n" || echo ""
+    if [ "$contains" = s ]
+        set -l cmd_args (commandline -opc)
+        xlist complete-sheets "$cmd_args[3]" 2>/dev/null || echo ""
+    end
+end
+
+function __fish_xlist_complete_headers
+    set -l contains (__fish_xlist_contains_sheets)
+
+    if [ "$contains" = s ]
+        set -l cmd_args (commandline -opc)
+        xlist complete-headers "$cmd_args[3]" "$cmd_args[4]" 2>/dev/null || echo ""
     end
 end
 
@@ -43,7 +53,11 @@ complete -c xlist -n "not __fish_seen_subcommand_from $commands" -a uniques -d "
 complete -c xlist -n "__fish_seen_subcommand_from $actions; and __fish_is_nth_token 2" -F
 
 # xlist headers
-complete -c xlist -n "__fish_seen_subcommand_from headers; and not __fish_seen_subcommand_from help" -ka '(__fish_xlist_complete_sheets)'
+complete -c xlist -n "__fish_seen_subcommand_from headers; and not __fish_seen_subcommand_from help; and __fish_is_nth_token 3" -ka '(__fish_xlist_complete_sheets)'
+
+# xlist uniques
+complete -c xlist -n "__fish_seen_subcommand_from uniques; and not __fish_seen_subcommand_from help; and __fish_is_nth_token 3" -ka '(__fish_xlist_complete_sheets)'
+complete -c xlist -n "__fish_seen_subcommand_from uniques; and not __fish_seen_subcommand_from help; and not __fish_is_nth_token 3; and not __fish_is_nth_token 2" -ka '(__fish_xlist_complete_headers)'
 
 
 # xlist help

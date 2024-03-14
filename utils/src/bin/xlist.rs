@@ -39,26 +39,99 @@ enum Command {
     },
     #[clap(hide = true)]
     CompleteSheets { path: PathBuf },
+    #[clap(hide = true)]
+    CompleteHeaders { path: PathBuf, sheet: String },
+}
+
+use std::path::Path;
+
+fn expand_tilde<P: AsRef<Path>>(path_user_input: P) -> Option<PathBuf> {
+    let p = path_user_input.as_ref();
+    if !p.starts_with("~") {
+        return Some(p.to_path_buf());
+    }
+    if p == Path::new("~") {
+        return dirs::home_dir();
+    }
+    dirs::home_dir().map(|mut h| {
+        if h == Path::new("/") {
+            // Corner case: `h` root directory;
+            // don't prepend extra `/`, just drop the tilde.
+            p.strip_prefix("~").unwrap().to_path_buf()
+        } else {
+            h.push(p.strip_prefix("~/").unwrap());
+            h
+        }
+    })
 }
 
 fn main() {
     let Args { command } = Args::parse();
 
     match command {
-        Command::CompleteSheets { ref path } | Command::Sheets { ref path } => {
+        Command::CompleteSheets { ref path } => {
+            let path = expand_tilde(path).unwrap();
+            let path = &path;
+            let sheets = open_workbook_auto(path);
+
+            if sheets.is_err() {
+                println!("{:?} para la ruta {:?}", sheets.err(), path.display());
+                std::process::exit(0);
+            }
+
+            let sheets = sheets.unwrap();
+
+            let sheets = sheets.sheet_names();
+            for sheet in sheets {
+                println!("{sheet}");
+            }
+        }
+        Command::CompleteHeaders {
+            ref path,
+            ref sheet,
+        } => {
+            let path = expand_tilde(path).unwrap();
+            let path = &path;
+            let sheets = open_workbook_auto(path);
+
+            if sheets.is_err() {
+                println!("{:?} para la ruta {:?}", sheets.err(), path.display());
+                std::process::exit(0);
+            }
+
+            let mut sheets = sheets.unwrap();
+            let sheet = sheets.worksheet_range(sheet);
+            if sheet.is_err() {
+                println!("{:?} para la ruta {:?}", sheet.err(), path.display());
+                std::process::exit(0);
+            }
+
+            let sheet = sheet.unwrap();
+            let mut rows = sheet
+                .rows()
+                .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
+
+            let Some(headers) = rows.next() else {
+                eprintln!("No hay encabezado en la hoja {sheet:?}");
+                return;
+            };
+
+            let headers = headers
+                .iter()
+                .map(|v| match v {
+                    calamine::Data::String(v) => v.to_owned(),
+                    v => v.to_string(),
+                })
+                .collect::<Vec<_>>();
+
+            for header in headers {
+                println!("{header}");
+            }
+        }
+        Command::Sheets { ref path } => {
             let sheets = open_workbook_auto(path).unwrap();
             let sheets = sheets.sheet_names();
-            if let Command::Sheets { .. } = command {
-                println!("{:#?}", sheets)
-            } else {
-                for (i, sheet) in sheets.iter().enumerate() {
-                    print!("{sheet:?}");
-                    if i + 1 < sheets.len() {
-                        print!(" ");
-                    }
-                }
-                println!()
-            }
+            println!("{:#?}", sheets)
         }
         Command::Headers { path, sheet } => {
             let mut sheets = open_workbook_auto(path).unwrap();
@@ -147,11 +220,17 @@ fn main() {
             }
 
             let mut vfinal = Vec::new();
+            let n_head = headers.len();
             vfinal.push(headers);
             vfinal.extend(finals.into_iter().collect::<BTreeSet<Vec<_>>>());
 
             let Some(save_path) = save else {
-                println!("{vfinal:#?}");
+                for r in vfinal {
+                    for (i, c) in r.iter().enumerate() {
+                        print!("{c:?}{}", if i + 1 < n_head { "," } else { "" });
+                    }
+                    print!("\n");
+                }
                 return;
             };
 

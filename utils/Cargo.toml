@@ -14,6 +14,7 @@ bstr.workspace = true
 clap.workspace = true
 rfd.workspace = true
 strings = { path = "../strings/" }
+dirs.workspace = true
 walkdir = "2.4.0"
 
 [build-dependencies]
