@@ -171,9 +171,8 @@ fn main() {
                 return;
             };
 
-            let mut rows = sheet
-                .rows()
-                .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
+            let mut rows = sheet.rows().filter(|row| row.iter().any(|a| !a.is_empty()));
+            // .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
 
             let Some(available_headers) = rows.next() else {
                 eprintln!("No hay encabezado en la hoja {sheet:?}");
