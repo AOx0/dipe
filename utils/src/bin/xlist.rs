@@ -85,8 +85,8 @@ fn main() {
             let path = &path;
             let sheets = open_workbook_auto(path);
 
-            if sheets.is_err() {
-                println!("{:?} para la ruta {:?}", sheets.err(), path.display());
+            if let Err(err) = sheets {
+                println!("{} para la ruta {:?}", err.to_string(), path.display());
                 std::process::exit(0);
             }
 
@@ -300,8 +300,10 @@ fn main() {
                 return;
             };
 
-            let mut rows = sheet.rows().filter(|row| row.iter().any(|a| !a.is_empty()));
-            // .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
+            let mut rows = sheet
+                .rows()
+                .filter(|row| row.iter().any(|a| !a.is_empty()))
+                .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
 
             let Some(available_headers) = rows.next() else {
                 eprintln!("No hay encabezado en la hoja {sheet:?}");
@@ -317,6 +319,12 @@ fn main() {
                 .collect::<Vec<_>>();
 
             let mut finals = Vec::new();
+
+            let headers = if headers.is_empty() {
+                available_headers.clone()
+            } else {
+                headers
+            };
 
             for (n_col, header) in headers.iter().enumerate() {
                 let Some(col) = available_headers.iter().position(|h| h == header) else {

@@ -5,6 +5,7 @@ members = [
     "strings",
     "utils",
     "icups", 
+    "becas", 
     "anuies",
     "dialogs",
 ]
@@ -32,6 +33,6 @@ debug = false
 strip = true
 
 [profile.dev]
-debug = true
+debug = 0
 codegen-backend = "cranelift"
 opt-level = 0
