@@ -2226,6 +2226,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "snii"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "itertools",
+ "polars",
+ "polars_excel_writer",
+ "polars_sheet_reader",
+ "strings",
+]
+
+[[package]]
 name = "sqlparser"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2255,6 +2267,9 @@ checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 [[package]]
 name = "strings"
 version = "0.0.0"
+dependencies = [
+ "unicode-normalization",
+]
 
 [[package]]
 name = "strsim"

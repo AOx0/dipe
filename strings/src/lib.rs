@@ -5,6 +5,8 @@
 #![allow(clippy::missing_panics_doc)]
 #![deny(clippy::unwrap_used)]
 
+use unicode_normalization::UnicodeNormalization;
+
 /// Iterate over all contiguous stings of alphabetical characters
 pub fn get_words(cadena: &str) -> impl Iterator<Item = &str> {
     cadena
@@ -25,7 +27,16 @@ pub fn space_join<'a>(mut iter: impl Iterator<Item = &'a str>) -> impl Iterator<
     }
 }
 
+pub fn replace_chars<'a>(
+    chars: impl Iterator<Item = char> + 'a,
+    matches: &'a [char],
+    to: char,
+) -> impl Iterator<Item = char> + 'a {
+    chars.map(move |c| if matches.contains(&c) { to } else { c })
+}
+
 /// Compare the first letter of each word
+#[must_use]
 pub fn compare_words(slice: &str, with: &str) -> bool {
     let words1 = get_words(slice);
     let words2 = get_words(with);
@@ -34,6 +45,33 @@ pub fn compare_words(slice: &str, with: &str) -> bool {
     let first_chars2 = n_chars(words2, 1);
 
     first_chars1.eq(first_chars2)
+}
+
+pub fn rm_specials<'a>(
+    word: impl Iterator<Item = &'a str> + 'a,
+) -> impl Iterator<Item = char> + 'a {
+    word.flat_map(move |w| {
+        w.chars()
+            .map(move |c| c.nfd().next().expect("All chars have at least one char?"))
+    })
+}
+
+pub fn chars_to_lower<'a>(
+    chars: impl Iterator<Item = char> + 'a,
+) -> impl Iterator<Item = char> + 'a {
+    chars.map(|c| c.to_ascii_lowercase())
+}
+
+pub fn chars_to_upper<'a>(
+    chars: impl Iterator<Item = char> + 'a,
+) -> impl Iterator<Item = char> + 'a {
+    chars.map(|c| c.to_ascii_uppercase())
+}
+
+pub fn rm_specials_char<'a>(
+    word: impl Iterator<Item = char> + 'a,
+) -> impl Iterator<Item = char> + 'a {
+    word.map(move |c| c.nfd().next().expect("All chars have at least one char?"))
 }
 
 pub fn n_chars<'a>(
@@ -148,6 +186,19 @@ mod tests {
 
         let res = n_chars(space_join(get_words(str)), 2).collect::<Vec<_>>();
 
+        assert_eq!(res.as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn normalize_char() {
+        let str = "Eyyyy cómo andamos mi Pepe perro ajá";
+        let expected = [
+            'E', 'y', 'y', 'y', 'y', ' ', 'c', 'o', 'm', 'o', ' ', 'a', 'n', 'd', 'a', 'm', 'o',
+            's', ' ', 'm', 'i', ' ', 'P', 'e', 'p', 'e', ' ', 'p', 'e', 'r', 'r', 'o', ' ', 'a',
+            'j', 'a',
+        ];
+
+        let res = rm_specials(space_join(get_words(str))).collect::<Vec<_>>();
         assert_eq!(res.as_slice(), expected.as_slice());
     }
 

@@ -1,2 +1,5 @@
 /target
 icups/dataframe.xlsx
+*.csv
+*.xlsx
+*.xlsx#

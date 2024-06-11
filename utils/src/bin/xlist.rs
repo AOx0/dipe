@@ -9,6 +9,9 @@ use std::{collections::BTreeSet, ops::Not, path::PathBuf};
 struct Args {
     #[clap(subcommand)]
     command: Command,
+    /// Replace all double quotes in text with a single quote
+    #[clap(short, long)]
+    replace_dquote: bool,
 }
 
 #[derive(Subcommand)]
@@ -17,6 +20,7 @@ enum Command {
     Sheets {
         /// Path of the xlsx-like file
         path: PathBuf,
+        idx: Vec<usize>,
     },
     /// List available headers in a sheet from the specified path
     Headers {
@@ -77,7 +81,10 @@ fn expand_tilde<P: AsRef<Path>>(path_user_input: P) -> Option<PathBuf> {
 }
 
 fn main() {
-    let Args { command } = Args::parse();
+    let Args {
+        command,
+        replace_dquote,
+    } = Args::parse();
 
     match command {
         Command::CompleteSheets { ref path } => {
@@ -86,7 +93,7 @@ fn main() {
             let sheets = open_workbook_auto(path);
 
             if let Err(err) = sheets {
-                println!("{} para la ruta {:?}", err.to_string(), path.display());
+                println!("{} para la ruta {:?}", err, path.display());
                 std::process::exit(0);
             }
 
@@ -139,14 +146,25 @@ fn main() {
                 println!("{header}");
             }
         }
-        Command::Sheets { ref path } => {
+        Command::Sheets { ref path, idx } => {
             let sheets = open_workbook_auto(path).unwrap();
             let sheets = sheets.sheet_names();
-            println!("{:#?}", sheets)
+
+            if idx.len() == 1 {
+                println!("{:#?}", sheets[0])
+            } else if idx.len() > 1 {
+                for i in idx {
+                    print!("{}", sheets[i]);
+                }
+                println!()
+            } else {
+                println!("{:#?}", sheets)
+            }
         }
         Command::Headers { path, sheet } => {
-            let mut sheets = open_workbook_auto(path).unwrap();
+            let mut sheets = open_workbook_auto(&path).unwrap();
             let Ok(sheet) = sheets.worksheet_range(&sheet) else {
+                eprintln!("Error para la ruta {:?}", path.display());
                 eprintln!("Hubo un problema abriendo {sheet:?}, seguro que existe?");
                 return;
             };
@@ -156,6 +174,7 @@ fn main() {
                 .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
 
             let Some(headers) = rows.next() else {
+                eprintln!("Error para la ruta {:?}", path.display());
                 eprintln!("No hay encabezado en la hoja {sheet:?}");
                 return;
             };
@@ -176,8 +195,9 @@ fn main() {
             headers,
             save,
         } => {
-            let mut sheets = open_workbook_auto(path).unwrap();
+            let mut sheets = open_workbook_auto(&path).unwrap();
             let Ok(sheet) = sheets.worksheet_range(&sheet) else {
+                eprintln!("Error para la ruta {:?}", path.display());
                 eprintln!("Hubo un problema abriendo {sheet:?}, seguro que existe?");
                 return;
             };
@@ -188,6 +208,7 @@ fn main() {
                 .filter(|row| row.first().is_some_and(|c| c.is_empty().not()));
 
             let Some(available_headers) = rows.next() else {
+                eprintln!("Error para la ruta {:?}", path.display());
                 eprintln!("No hay encabezado en la hoja {sheet:?}");
                 return;
             };
@@ -204,6 +225,7 @@ fn main() {
 
             for (n_col, header) in headers.iter().enumerate() {
                 let Some(col) = available_headers.iter().position(|h| h == header) else {
+                    eprintln!("Error para la ruta {:?}", path.display());
                     eprintln!("Error: Can not find header {header:?}, skipping.");
                     continue;
                 };
@@ -238,10 +260,20 @@ fn main() {
 
             let Some(save_path) = save else {
                 for r in vfinal {
-                    for (i, c) in r.iter().enumerate() {
-                        print!("{c:?}{}", if i + 1 < n_head { "," } else { "" });
+                    if replace_dquote {
+                        for (i, c) in r.iter().enumerate() {
+                            print!(
+                                "{:?}{}",
+                                c.replace('"', "'"),
+                                if i + 1 < n_head { "," } else { "" }
+                            );
+                        }
+                    } else {
+                        for (i, c) in r.iter().enumerate() {
+                            print!("{c:?}{}", if i + 1 < n_head { "," } else { "" });
+                        }
                     }
-                    print!("\n");
+                    println!();
                 }
                 return;
             };
@@ -255,11 +287,21 @@ fn main() {
                     b"csv" => {
                         let mut file = std::fs::File::create(save_path).unwrap();
                         for vec in vfinal {
-                            for (i, v) in vec.iter().enumerate() {
-                                if i < vec.len() - 1 {
-                                    write!(file, "{v:#?},").unwrap();
-                                } else {
-                                    write!(file, "{v:#?}").unwrap();
+                            if replace_dquote {
+                                for (i, v) in vec.iter().enumerate() {
+                                    if i < vec.len() - 1 {
+                                        write!(file, "{:#?},", v.replace('"', "'")).unwrap();
+                                    } else {
+                                        write!(file, "{:#?}", v.replace('"', "'")).unwrap();
+                                    }
+                                }
+                            } else {
+                                for (i, v) in vec.iter().enumerate() {
+                                    if i < vec.len() - 1 {
+                                        write!(file, "{v:#?},").unwrap();
+                                    } else {
+                                        write!(file, "{v:#?}").unwrap();
+                                    }
                                 }
                             }
                             writeln!(file).unwrap();
@@ -270,11 +312,29 @@ fn main() {
                         let mut worksheet = Worksheet::new();
                         worksheet.set_name("Uniques").unwrap();
 
-                        for (row, values) in vfinal.iter().enumerate() {
-                            for (col, value) in values.iter().enumerate() {
-                                worksheet
-                                    .write(row.try_into().unwrap(), col.try_into().unwrap(), value)
-                                    .unwrap();
+                        if replace_dquote {
+                            for (row, values) in vfinal.iter().enumerate() {
+                                for (col, value) in values.iter().enumerate() {
+                                    worksheet
+                                        .write(
+                                            row.try_into().unwrap(),
+                                            col.try_into().unwrap(),
+                                            value.replace('"', "'"),
+                                        )
+                                        .unwrap();
+                                }
+                            }
+                        } else {
+                            for (row, values) in vfinal.iter().enumerate() {
+                                for (col, value) in values.iter().enumerate() {
+                                    worksheet
+                                        .write(
+                                            row.try_into().unwrap(),
+                                            col.try_into().unwrap(),
+                                            value,
+                                        )
+                                        .unwrap();
+                                }
                             }
                         }
 
@@ -367,7 +427,7 @@ fn main() {
                     for (i, c) in r.iter().enumerate() {
                         print!("{c:?}{}", if i + 1 < n_head { "," } else { "" });
                     }
-                    print!("\n");
+                    println!();
                 }
                 return;
             };
@@ -381,11 +441,21 @@ fn main() {
                     b"csv" => {
                         let mut file = std::fs::File::create(save_path).unwrap();
                         for vec in vfinal {
-                            for (i, v) in vec.iter().enumerate() {
-                                if i < vec.len() - 1 {
-                                    write!(file, "{v:#?},").unwrap();
-                                } else {
-                                    write!(file, "{v:#?}").unwrap();
+                            if replace_dquote {
+                                for (i, v) in vec.iter().enumerate() {
+                                    if i < vec.len() - 1 {
+                                        write!(file, "{:#?},", v.replace('"', "'")).unwrap();
+                                    } else {
+                                        write!(file, "{:#?}", v.replace('"', "'")).unwrap();
+                                    }
+                                }
+                            } else {
+                                for (i, v) in vec.iter().enumerate() {
+                                    if i < vec.len() - 1 {
+                                        write!(file, "{v:#?},").unwrap();
+                                    } else {
+                                        write!(file, "{v:#?}").unwrap();
+                                    }
                                 }
                             }
                             writeln!(file).unwrap();
@@ -396,11 +466,29 @@ fn main() {
                         let mut worksheet = Worksheet::new();
                         worksheet.set_name("Values").unwrap();
 
-                        for (row, values) in vfinal.iter().enumerate() {
-                            for (col, value) in values.iter().enumerate() {
-                                worksheet
-                                    .write(row.try_into().unwrap(), col.try_into().unwrap(), value)
-                                    .unwrap();
+                        if replace_dquote {
+                            for (row, values) in vfinal.iter().enumerate() {
+                                for (col, value) in values.iter().enumerate() {
+                                    worksheet
+                                        .write(
+                                            row.try_into().unwrap(),
+                                            col.try_into().unwrap(),
+                                            value.replace('"', "'"),
+                                        )
+                                        .unwrap();
+                                }
+                            }
+                        } else {
+                            for (row, values) in vfinal.iter().enumerate() {
+                                for (col, value) in values.iter().enumerate() {
+                                    worksheet
+                                        .write(
+                                            row.try_into().unwrap(),
+                                            col.try_into().unwrap(),
+                                            value,
+                                        )
+                                        .unwrap();
+                                }
                             }
                         }
 

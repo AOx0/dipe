@@ -1,0 +1,12 @@
+[package]
+name = "snii"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+itertools.workspace = true
+polars.workspace = true
+calamine.workspace = true
+polars_excel_writer.workspace = true
+polars_sheet_reader = { path = "../psr/" }
+strings = { path = "../strings/" }
