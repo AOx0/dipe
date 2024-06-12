@@ -56,6 +56,12 @@ pub fn rm_specials<'a>(
     })
 }
 
+pub fn rm_specials_char<'a>(
+    word: impl Iterator<Item = char> + 'a,
+) -> impl Iterator<Item = char> + 'a {
+    word.map(move |c| c.nfd().next().expect("All chars have at least one char?"))
+}
+
 pub fn chars_to_lower<'a>(
     chars: impl Iterator<Item = char> + 'a,
 ) -> impl Iterator<Item = char> + 'a {
@@ -66,12 +72,6 @@ pub fn chars_to_upper<'a>(
     chars: impl Iterator<Item = char> + 'a,
 ) -> impl Iterator<Item = char> + 'a {
     chars.map(|c| c.to_ascii_uppercase())
-}
-
-pub fn rm_specials_char<'a>(
-    word: impl Iterator<Item = char> + 'a,
-) -> impl Iterator<Item = char> + 'a {
-    word.map(move |c| c.nfd().next().expect("All chars have at least one char?"))
 }
 
 pub fn n_chars<'a>(
