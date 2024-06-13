@@ -89,9 +89,9 @@ fn generar(
         .select([
             col("Id Profesor"),
             col("CVU"),
-            col("Institución"),
+            // col("Institución"),
             col("Nombre"),
-            // col("NOMBRE DEL INVESTIGADOR").alias("Nombre Padron"),
+            col("NOMBRE DEL INVESTIGADOR").alias("Nombre Padron"),
             col("NIVEL").alias("Nivel"),
             // Toca cambiar el nombre de la columna en uno de los dos
             col("FECHA FIN DE VIGENCIA").alias("Fin de vigencia"),
