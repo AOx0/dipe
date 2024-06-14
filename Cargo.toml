@@ -8,7 +8,7 @@ members = [
   "becas",
   "anuies",
   "dialogs",
-  "snii",
+  "snii", "trans",
 ]
 resolver = "2"
 
