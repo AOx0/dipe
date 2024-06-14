@@ -15,7 +15,7 @@ clap.workspace = true
 rfd.workspace = true
 strings = { path = "../strings/" }
 dirs.workspace = true
-walkdir = "2.4.0"
+walkdir = "2.5.0"
 
 [build-dependencies]
 embed-resource.workspace = true
