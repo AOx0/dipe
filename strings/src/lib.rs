@@ -7,13 +7,22 @@
 
 use unicode_normalization::UnicodeNormalization;
 
+pub use edit_distance::edit_distance;
+
 /// Iterate over all contiguous stings of alphabetical characters
 pub fn get_words(cadena: &str) -> impl Iterator<Item = &str> {
+    get_words_ext(cadena, &[])
+}
+
+pub fn sanitize<'a>(contents: &'a str, seps: &'a [char]) -> impl Iterator<Item = char> + 'a {
+    chars_to_lower(rm_specials(space_join(get_words_ext(contents, seps))))
+}
+
+pub fn get_words_ext<'a>(cadena: &'a str, extras: &'a [char]) -> impl Iterator<Item = &'a str> {
     cadena
         .split(' ')
-        .flat_map(|a| a.split('\n'))
-        .flat_map(|a| a.split('\t'))
-        .flat_map(|a| a.split('\r'))
+        .flat_map(|a| a.split(&['\n', '\t', '\r']))
+        .flat_map(move |a| a.split(extras))
         .map(str::trim)
         .filter(|a| !a.is_empty())
 }
